@@ -1,0 +1,12 @@
+__pycache__/
+__pycache__/*
+__pycache__/**/*
+*.egg-info/
+*.egg-info/*
+*.egg-info/**/*
+build/
+dist/
+*.ini
+*.txt
+*.spec
+.python-version
