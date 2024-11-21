@@ -129,7 +129,7 @@ def main():
     parser = argparse.ArgumentParser(description='cdn-dl 下载配置')
     parser.add_argument('-u', '--url', type=str, required=True, help='文件下载url')
     parser.add_argument('-o', '--out', type=str, required=True, help='文件下载路径')
-    parser.add_argument('cdn', help='cdn config配置, eg: 1.2.3.4:443')
+    parser.add_argument('cdn', help='cdn config配置, eg: 1.2.3.4:443 或者hosts 文件')
     parser.add_argument('-ua', '--use_agent', type=bool, default=False, help='是否使用user agent')
     parser.add_argument('-ts', '--trunk_size', type=int, default=8192, help='下载使用的trunk size, 默认8192')
     args = parser.parse_args()
