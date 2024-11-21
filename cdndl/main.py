@@ -71,6 +71,7 @@ def download_file(url: str, save_path: str, cdn_config: str, ua: bool, ts: int):
             if response.status in (301, 302, 303, 307, 308) and 'Location' in response.headers:
                 # 获取重定向的 URL
                 redirect_url = response.headers["Location"]
+                print('跳转url:', redirect_url)
                 hostname, path = parse_url(redirect_url)
                 # 为新路径建立新的连接池，将 hostname 指向目标 IP 和端口
                 pool = urllib3.HTTPSConnectionPool(
