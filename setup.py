@@ -11,8 +11,9 @@ with open(os.path.join(this_directory, "README.md"), encoding="utf-8") as f:
 setup(
     name='cdn-dl',
     version='0.1',
-    description='nftset updater for openwrt',
+    description='通过cdn 下载文件',
     long_description=long_description,
+    long_description_content_type='text/markdown',
     author="nobitaqaq",
     author_email="xiaoleigs@gmail.com",
     keywords=["cdn-dl", "cdn 文件下载器"],
