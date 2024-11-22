@@ -66,17 +66,27 @@ def parse_url(url: str):
     parsed_url = urlparse(url)
     return parsed_url.hostname, parsed_url.path
 
-def download_file(url: str, save_path: str, cdn_config: str, ua: bool, ts: int):
+def download_file(url: str, save_path: str, cdn_config: str, ua: bool, ts: int, timeout: int, retry: int):
+    def get_ip_port(hostname: str):
+        nonlocal cdn_map
+        choices = cdn_map.get(hostname)
+        if choices:
+            ip, port = random.choice(choices)
+        else:
+            choices = []
+            for _, v in cdn_map.items():
+                choices.extend(v)
+            ip, port = random.choice(choices)
+        return ip, port
+
     hostname, _ = parse_url(url)
     cdn_map = parse_cdn_config(hostname, cdn_config)
-    def_ip, def_port = random.choice(cdn_map.get(hostname))
     ip, port = None, None
     headers = {}
     if ua:
         headers.update({'User-Agent': random.choice(USER_AGENTS)})
     while True:
-        ip = ip if ip else def_ip
-        port = port if port else def_port
+        ip, port = get_ip_port(hostname)
         print('cdn 配置为: {}:{}:{}'.format(hostname, ip, port))
         pool = urllib3.HTTPSConnectionPool(
             ip,
@@ -91,18 +101,16 @@ def download_file(url: str, save_path: str, cdn_config: str, ua: bool, ts: int):
                              redirect=False,
                              headers=headers,
                              assert_same_host=False,
-                             timeout=10,
+                             timeout=timeout,
                              preload_content=False,
-                             retries=urllib3.util.Retry(10, backoff_factor=1))
+                             retries=urllib3.util.Retry(retry))
             # 检查是否为重定向
             print('请求{} 返回 {}\n'.format(url, response.status))
             if response.status in (301, 302, 303, 307, 308) and 'Location' in response.headers:
                 # 获取重定向的 URL
-                url = response.headers["Location"]
+                url = response.headers['Location']
                 hostname, _ = parse_url(url)
-                # 为新路径建立新的连接池，将 hostname 指向目标 IP 和端口
-                ip, port = random.choice(cdn_map.get(hostname)) if cdn_map.get(hostname) else (None, None)
-                headers = response.headers
+                # headers = response.headers
                 continue
             if response.status == 200:
                 total_size = int(response.headers.get('content-length', 0))
@@ -114,13 +122,12 @@ def download_file(url: str, save_path: str, cdn_config: str, ua: bool, ts: int):
                     unit_divisor=1024,
                 ) as bar:
                     for data in response.stream(ts):
-                        # 写入文件并更新进度条
                         file.write(data)
                         bar.update(len(data))
                     response.release_conn()
                     return True
             else:
-                return False
+                raise RuntimeError('请求url: {}返回错误码: {}'.format(url, response.status))
         except Exception as e:
             print('下载文件异常:', e)
             return False
@@ -132,13 +139,17 @@ def main():
     parser.add_argument('cdn', help='cdn config配置, eg: 1.2.3.4:443 或者hosts 文件')
     parser.add_argument('-ua', '--use_agent', type=bool, default=False, help='是否使用user agent')
     parser.add_argument('-ts', '--trunk_size', type=int, default=8192, help='下载使用的trunk size, 默认8192')
+    parser.add_argument('-t', '--timeout', type=int, default=10, help='下载请求超时时间, 默认10s')
+    parser.add_argument('-r', '--retry', type=int, default=3, help='下载请求重试次数, 默认3')
     args = parser.parse_args()
     url = args.url
     save_path = path.join(args.out)
     cdn_config = args.cdn
     ua = args.use_agent
     ts = args.trunk_size
-    res = download_file(url, save_path, cdn_config, ua, ts)
+    timeout = args.timeout
+    retry = args.retry
+    res = download_file(url, save_path, cdn_config, ua, ts, timeout, retry)
     msg = '从{} 下载文件到{} {}'.format(url, save_path, '成功' if res else '失败')
     print(msg)
 
