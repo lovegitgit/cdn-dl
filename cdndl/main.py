@@ -9,6 +9,7 @@ import urllib3
 import ipaddress
 from urllib.parse import urlparse
 from collections import defaultdict
+from urllib3.exceptions import ConnectTimeoutError, MaxRetryError
 
 
 USER_AGENTS = [
@@ -67,26 +68,47 @@ def parse_url(url: str):
     return parsed_url.hostname, parsed_url.path
 
 def download_file(url: str, save_path: str, cdn_config: str, ua: bool, ts: int, timeout: int, retry: int):
+    def init_cdn_map():
+        hostname, _ = parse_url(url)
+        cdn_map = parse_cdn_config(hostname, cdn_config)
+        return cdn_map
+
     def get_ip_port(hostname: str):
-        nonlocal cdn_map
         choices = cdn_map.get(hostname)
-        if choices:
-            ip, port = random.choice(choices)
-        else:
+        if not choices:
             choices = []
             for _, v in cdn_map.items():
                 choices.extend(v)
-            ip, port = random.choice(choices)
-        return ip, port
-
-    hostname, _ = parse_url(url)
-    cdn_map = parse_cdn_config(hostname, cdn_config)
-    ip, port = None, None
+        used_choices = bad_cdn_map.get(hostname, [])
+        available_choices = [choice for choice in choices if choice not in used_choices]
+        if available_choices:
+            return random.choice(available_choices)
+        else:
+            return None, None
+    res = False
+    cdn_map = init_cdn_map()
     headers = {}
     if ua:
         headers.update({'User-Agent': random.choice(USER_AGENTS)})
+    bad_cdn_map = defaultdict(list)
+    last_hostname = None
+    retry_cnt = 0
     while True:
+        def need_exit():
+            print('请求{} 异常\n'.format(url))
+            bad_cdn_map[hostname].append((ip, port))
+            return retry_cnt >= retry
+
+        hostname, _ = parse_url(url)
+        if last_hostname != hostname:
+            retry_cnt = 1
+        else:
+            retry_cnt += 1
+        last_hostname = hostname
         ip, port = get_ip_port(hostname)
+        if not ip:
+            print('所有CDN 都无法下载, 退出中... ...')
+            break
         print('cdn 配置为: {}:{}:{}'.format(hostname, ip, port))
         pool = urllib3.HTTPSConnectionPool(
             ip,
@@ -103,13 +125,12 @@ def download_file(url: str, save_path: str, cdn_config: str, ua: bool, ts: int, 
                              assert_same_host=False,
                              timeout=timeout,
                              preload_content=False,
-                             retries=urllib3.util.Retry(retry))
+                             retries=0)
             # 检查是否为重定向
             print('请求{} 返回 {}\n'.format(url, response.status))
             if response.status in (301, 302, 303, 307, 308) and 'Location' in response.headers:
                 # 获取重定向的 URL
                 url = response.headers['Location']
-                hostname, _ = parse_url(url)
                 # headers = response.headers
                 continue
             if response.status == 200:
@@ -125,12 +146,20 @@ def download_file(url: str, save_path: str, cdn_config: str, ua: bool, ts: int, 
                         file.write(data)
                         bar.update(len(data))
                     response.release_conn()
-                    return True
+                    res = True
+                    break
             else:
-                raise RuntimeError('请求url: {}返回错误码: {}'.format(url, response.status))
+                if need_exit():
+                    break
+                continue
+        except (ConnectTimeoutError, MaxRetryError):
+            if need_exit():
+                break
+            continue
         except Exception as e:
             print('下载文件异常:', e)
-            return False
+            break
+    return res
 
 def main():
     parser = argparse.ArgumentParser(description='cdn-dl 下载配置')
