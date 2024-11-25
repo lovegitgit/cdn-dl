@@ -237,9 +237,9 @@ def get_cdn():
                 dns = []
                 try:
                     session = requests.Session()
-                    session.mount('https://', adapter=requests.adapters.HTTPAdapter(max_retries=3))
+                    session.mount('https://', adapter=requests.adapters.HTTPAdapter(max_retries=retry))
 
-                    with session.get(api.format(domain), headers={'accept': 'application/dns-json'}, timeout=10) as res:
+                    with session.get(api.format(domain), headers={'accept': 'application/dns-json'}, timeout=timeout) as res:
                         json_data = res.json()
                         if 'Answer' in json_data:
                             records = json_data['Answer']
@@ -284,7 +284,9 @@ def get_cdn():
 
     parser = argparse.ArgumentParser(description='cdn-get 配置')
     parser.add_argument('-o', '--out', type=str, required=True, help='输出hosts 文件路径')
-    parser.add_argument('-t', '--thread', type=int, default=8, help='多线程数量')
+    parser.add_argument('-T', '--thread', type=int, default=8, help='多线程数量')
+    parser.add_argument('-t', '--timeout', type=int, default=10, help='下载请求超时时间, 默认10s')
+    parser.add_argument('-r', '--retry', type=int, default=3, help='下载请求重试次数, 默认3')
     parser.add_argument('domain', nargs='+', help='需要获取cdn的域名或者文本')
     # 'https://dns.google/resolve?name={}&type=A'
     parser.add_argument('--api', type=str, default='http://dns.alidns.com/resolve?name={}&type=1', help='dns api, 默认ali')
@@ -294,6 +296,8 @@ def get_cdn():
     api = args.api
     print('DNS API:', api)
     threads = args.thread
+    timeout = args.timeout
+    retry = args.retry
     domains = parse_domains()
     print('待解析域名列表:', domains)
     dns_map = get_dns(domains)

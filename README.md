@@ -42,7 +42,7 @@ help:
 
 ```shell
 cdn-get -h
-usage: cdn-get [-h] -o OUT [-t THREAD] [--api API] domain [domain ...]
+usage: cdn-get [-h] -o OUT [-T THREAD] [-t TIMEOUT] [-r RETRY] [--api API] domain [domain ...]
 
 cdn-get 配置
 
@@ -52,8 +52,12 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -o OUT, --out OUT     输出hosts 文件路径
-  -t THREAD, --thread THREAD
+  -T THREAD, --thread THREAD
                         多线程数量
+  -t TIMEOUT, --timeout TIMEOUT
+                        下载请求超时时间, 默认10s
+  -r RETRY, --retry RETRY
+                        下载请求重试次数, 默认3
   --api API             dns api, 默认ali
 ```
 
