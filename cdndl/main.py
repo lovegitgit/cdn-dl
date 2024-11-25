@@ -137,20 +137,12 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
     if ua:
         headers.update({'User-Agent': random.choice(USER_AGENTS)})
     bad_cdn_map = defaultdict(list)
-    last_hostname = None
-    retry_cnt = 0
     while True:
-        def need_exit():
+        def handle_error():
             print('请求{} 异常\n'.format(url))
             bad_cdn_map[hostname].append((ip, port))
-            return retry_cnt >= retry
 
         hostname, _ = parse_url(url)
-        if last_hostname != hostname:
-            retry_cnt = 1
-        else:
-            retry_cnt += 1
-        last_hostname = hostname
         ip, port = get_ip_port(hostname)
         if not ip:
             print('所有CDN 都无法下载, 退出中... ...')
@@ -165,42 +157,40 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
         )
         headers.update({'Host': hostname})
         try:
-            response = pool.urlopen('GET', url,
+            with pool.urlopen('GET', url,
                              redirect=False,
                              headers=headers,
                              assert_same_host=False,
                              timeout=timeout,
                              preload_content=False,
-                             retries=0)
-            # 检查是否为重定向
-            print('请求{} 返回 {}\n'.format(url, response.status))
-            if response.status in (301, 302, 303, 307, 308) and 'Location' in response.headers:
-                # 获取重定向的 URL
-                url = response.headers['Location']
-                # headers = response.headers
-                continue
-            if response.status == 200:
-                total_size = int(response.headers.get('content-length', 0))
-                with open(save_path, 'wb') as file, tqdm(
-                    desc=save_path,
-                    total=total_size,
-                    unit='K',
-                    unit_scale=True,
-                    unit_divisor=1024,
-                ) as bar:
-                    for data in response.stream(ts):
-                        file.write(data)
-                        bar.update(len(data))
-                    response.release_conn()
-                    res = True
-                    break
-            else:
-                if need_exit():
-                    break
-                continue
+                             retries=urllib3.Retry(retry, backoff_factor=1)) as response:
+                # 检查是否为重定向
+                print('请求{} 返回 {}\n'.format(url, response.status))
+                if response.status in (301, 302, 303, 307, 308) and 'Location' in response.headers:
+                    # 获取重定向的 URL
+                    url = response.headers['Location']
+                    # headers = response.headers
+                    continue
+                if response.status == 200:
+                    total_size = int(response.headers.get('content-length', 0))
+                    with open(save_path, 'wb') as file, tqdm(
+                        desc=save_path,
+                        total=total_size,
+                        unit='K',
+                        unit_scale=True,
+                        unit_divisor=1024,
+                    ) as bar:
+                        for data in response.stream(ts):
+                            file.write(data)
+                            bar.update(len(data))
+                        response.release_conn()
+                        res = True
+                        break
+                else:
+                    handle_error()
+                    continue
         except (ConnectTimeoutError, MaxRetryError):
-            if need_exit():
-                break
+            handle_error()
             continue
         except Exception as e:
             print('下载文件异常:', e)
