@@ -10,7 +10,7 @@ with open(os.path.join(this_directory, "README.md"), encoding="utf-8") as f:
 
 setup(
     name='cdn-dl',
-    version='0.9',
+    version='1.0',
     description='通过cdn 下载文件',
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -27,6 +27,7 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         'tqdm',
-        'urllib3'
+        'urllib3',
+        'requests',
     ],
 )
