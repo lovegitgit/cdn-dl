@@ -5,6 +5,7 @@
 help:
 
 ```shell
+cdn-dl -h
 usage: cdn-dl [-h] -u URL -o OUT [-ua USE_AGENT] [-ts TRUNK_SIZE] [-t TIMEOUT] [-r RETRY] [-d] cdn [cdn ...]
 
 cdn-dl 下载配置
@@ -30,5 +31,5 @@ optional arguments:
 eg:
 
 ```shell
-cdn-dl -u https://download.docker.com/linux/static/stable/x86_64/docker-27.2.1.tgz -o test.tgz 1.1.1.1:443
+cdn-dl -u https://download.docker.com/linux/static/stable/x86_64/docker-27.2.1.tgz -o test.tgz docker.hosts
 ```
