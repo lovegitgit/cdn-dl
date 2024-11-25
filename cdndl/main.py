@@ -97,6 +97,8 @@ def parse_cdn_config(hostname: str, cdn_configs: str):
             hostname_ip_map[hostname].append((ip, port))
     if not hostname_ip_map:
         raise RuntimeError('无法检测到可用CDN, 请检查配置!')
+    for k, v in hostname_ip_map.items():
+        hostname_ip_map[k] = list(dict.fromkeys(v))
     if DEBUG:
         print()
         print('CDN 配置如下:')
