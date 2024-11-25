@@ -3,9 +3,14 @@
 
 import argparse
 from os import path
+import os
 import random
 import re
+import signal
+from time import sleep
 from typing import List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import requests
 from tqdm import tqdm
 import urllib3
 import ipaddress
@@ -24,6 +29,14 @@ USER_AGENTS = [
 
 
 urllib3.disable_warnings()
+
+# 注册全局退出监听
+def signal_handler(sig, frame):
+    print('You pressed Ctrl+C!')
+    os._exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+
 
 def is_ip_address(ip_str: str):
     try:
@@ -197,6 +210,96 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
             break
     return res
 
+def get_cdn():
+    def parse_domains():
+        domains = []
+        for domain in domain_arg:
+            if path.exists(domain) and path.isfile(domain):
+                with open(domain, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        if is_domain_name(line):
+                            domains.append(line)
+            else:
+                if is_domain_name(domain):
+                    domains.append(domain)
+        if not domains:
+            raise RuntimeError('未能读取到有效域名, 请检查参数!')
+        domains = list(dict.fromkeys(domains))
+        return domains
+
+    def get_dns(domains: List[str]):
+        def dns_lookup(domain):
+            def dns_lookup_internal():
+                has_error = False
+                dns = []
+                try:
+                    session = requests.Session()
+                    session.mount('https://', adapter=requests.adapters.HTTPAdapter(max_retries=3))
+
+                    with session.get(api.format(domain), headers={'accept': 'application/dns-json'}, timeout=10) as res:
+                        json_data = res.json()
+                        if 'Answer' in json_data:
+                            records = json_data['Answer']
+                            for record in records:
+                                if record['type'] == 1:
+                                    dns.append(record['data'])
+                except:
+                    has_error = True
+                return has_error, dns
+
+            print(f"Performing DNS lookup for {domain}...")
+            has_error, dns = dns_lookup_internal()
+            retry_cnt = 0
+            while has_error and retry_cnt < 3:
+                stay_seconds = round(random.uniform(1, 3), 2)
+                sleep(stay_seconds)
+                print(f"Retrying DNS lookup for {domain}...")
+                has_error, dns = dns_lookup_internal()
+                retry_cnt += 1
+            return domain, dns
+
+        dns_map = defaultdict(list)
+        with ThreadPoolExecutor(max_workers=threads) as executor:
+            future_to_domain = {executor.submit(dns_lookup, domain) for domain in domains}
+            for future in as_completed(future_to_domain):
+                domain, dns = future.result()
+                dns_map[domain] = dns
+            executor.shutdown(wait=True)
+        for k, v in dns_map.items():
+            dns_map[k] = list(dict.fromkeys(v))
+        return dns_map
+
+    def save_hosts():
+        with open(save_path, 'w', encoding='utf-8') as f:
+            for k, v in dns_map.items():
+                for ip in v:
+                    line = '{} {}'.format(ip, k)
+                    f.write(line)
+                    f.write('\n')
+        print('hosts 文件已导出到 {}'.format(save_path))
+
+
+    parser = argparse.ArgumentParser(description='cdn-get 配置')
+    parser.add_argument('-o', '--out', type=str, required=True, help='输出hosts 文件路径')
+    parser.add_argument('-t', '--thread', type=int, default=8, help='多线程数量')
+    parser.add_argument('domain', nargs='+', help='需要获取cdn的域名或者文本')
+    # 'https://dns.google/resolve?name={}&type=A'
+    parser.add_argument('--api', type=str, default='http://dns.alidns.com/resolve?name={}&type=1', help='dns api, 默认ali')
+    args = parser.parse_args()
+    domain_arg = args.domain
+    save_path = path.join(args.out)
+    api = args.api
+    print('DNS API:', api)
+    threads = args.thread
+    domains = parse_domains()
+    print('待解析域名列表:', domains)
+    dns_map = get_dns(domains)
+    save_hosts()
+
+
 def main():
     parser = argparse.ArgumentParser(description='cdn-dl 下载配置')
     parser.add_argument('-u', '--url', type=str, required=True, help='文件下载url')
@@ -222,7 +325,7 @@ def main():
     print(msg)
 
 if __name__ == '__main__':
-    main()
+    get_cdn()
 
 
 

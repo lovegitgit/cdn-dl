@@ -10,7 +10,7 @@ with open(os.path.join(this_directory, "README.md"), encoding="utf-8") as f:
 
 setup(
     name='cdn-dl',
-    version='0.7',
+    version='0.8',
     description='通过cdn 下载文件',
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'cdn-dl = cdndl.main:main',
+            'cdn-get = cdndl.main:get_cdn',
         ]
     },
     python_requires=">=3.8",
