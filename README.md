@@ -2,6 +2,8 @@
 
 一键下载文件by cdn
 
+## cdn-dl
+
 help:
 
 ```shell
@@ -32,4 +34,31 @@ eg:
 
 ```shell
 cdn-dl -u https://download.docker.com/linux/static/stable/x86_64/docker-27.2.1.tgz -o test.tgz docker.hosts
+```
+
+## cdn-get
+
+help:
+
+```shell
+cdn-get -h
+usage: cdn-get [-h] -o OUT [-t THREAD] [--api API] domain [domain ...]
+
+cdn-get 配置
+
+positional arguments:
+  domain                需要获取cdn的域名或者文本
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -o OUT, --out OUT     输出hosts 文件路径
+  -t THREAD, --thread THREAD
+                        多线程数量
+  --api API             dns api, 默认ali
+```
+
+eg:
+
+```shell
+cdn-get download.docker.com -o docker.hosts
 ```
