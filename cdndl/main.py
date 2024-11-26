@@ -241,7 +241,6 @@ def get_cdn():
 
                     with session.get(api.format(domain), headers={'accept': 'application/dns-json'}, timeout=timeout) as res:
                         json_data = res.json()
-                        print('DBG', json_data)
                         if 'Answer' in json_data:
                             records = json_data['Answer']
                             for record in records:
