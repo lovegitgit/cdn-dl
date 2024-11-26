@@ -241,6 +241,7 @@ def get_cdn():
 
                     with session.get(api.format(domain), headers={'accept': 'application/dns-json'}, timeout=timeout) as res:
                         json_data = res.json()
+                        print('DBG', json_data)
                         if 'Answer' in json_data:
                             records = json_data['Answer']
                             for record in records:
@@ -272,27 +273,36 @@ def get_cdn():
             dns_map[k] = list(dict.fromkeys(v))
         return dns_map
 
-    def save_hosts():
-        with open(save_path, 'w', encoding='utf-8') as f:
-            for k, v in dns_map.items():
-                for ip in v:
-                    line = '{} {}'.format(ip, k)
-                    f.write(line)
-                    f.write('\n')
-        print('hosts 文件已导出到 {}'.format(save_path))
-
+    def save_or_print_hosts():
+        if not dns_map:
+            print('DNS 记录为空, 请检查域名是否正确!')
+            return
+        print('DNS 解析记录如下:')
+        for k, v in dns_map.items():
+            for ip in v:
+                line = '{} {}'.format(ip, k)
+                print(line)
+        if path_arg:
+            save_path = path.join(path_arg)
+            with open(save_path, 'w', encoding='utf-8') as f:
+                for k, v in dns_map.items():
+                    for ip in v:
+                        line = '{} {}'.format(ip, k)
+                        f.write(line)
+                        f.write('\n')
+            print('hosts 文件已导出到 {}'.format(save_path))
 
     parser = argparse.ArgumentParser(description='cdn-get 配置')
-    parser.add_argument('-o', '--out', type=str, required=True, help='输出hosts 文件路径')
+    parser.add_argument('-o', '--out', type=str, default=None, help='输出hosts 文件路径')
     parser.add_argument('-T', '--thread', type=int, default=8, help='多线程数量')
     parser.add_argument('-t', '--timeout', type=int, default=10, help='下载请求超时时间, 默认10s')
     parser.add_argument('-r', '--retry', type=int, default=3, help='下载请求重试次数, 默认3')
     parser.add_argument('domain', nargs='+', help='需要获取cdn的域名或者文本')
     # 'https://dns.google/resolve?name={}&type=A'
-    parser.add_argument('--api', type=str, default='http://dns.alidns.com/resolve?name={}&type=1', help='dns api, 默认ali')
+    parser.add_argument('--api', type=str, default='https://dns.alidns.com/resolve?name={}&type=1', help='dns api, 默认ali')
     args = parser.parse_args()
     domain_arg = args.domain
-    save_path = path.join(args.out)
+    path_arg = args.out
     api = args.api
     print('DNS API:', api)
     threads = args.thread
@@ -301,8 +311,7 @@ def get_cdn():
     domains = parse_domains()
     print('待解析域名列表:', domains)
     dns_map = get_dns(domains)
-    save_hosts()
-
+    save_or_print_hosts()
 
 def main():
     parser = argparse.ArgumentParser(description='cdn-dl 下载配置')
