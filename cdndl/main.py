@@ -297,6 +297,7 @@ def get_cdn():
                             if response.status == 200:
                                 break
                     except Exception as e:
+                        print('查询DNS 遇到错误!')
                         if not cdn_map:
                             break
                         continue
