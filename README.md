@@ -42,7 +42,7 @@ help:
 
 ```shell
 cdn-get -h
-usage: cdn-get [-h] [-o OUT] [-c CDN] [-T THREAD] [-t TIMEOUT] [-r RETRY] [--api API] [-d] domain [domain ...]
+usage: cdn-get [-h] [-o OUT] [-c CDN [CDN ...]] [-T THREAD] [-t TIMEOUT] [-r RETRY] [--api API] [-d] domain [domain ...]
 
 cdn-get 配置
 
@@ -52,7 +52,8 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -o OUT, --out OUT     输出hosts 文件路径
-  -c CDN, --cdn CDN     输出hosts 文件路径
+  -c CDN [CDN ...], --cdn CDN [CDN ...]
+                        cdn configs配置,支持ip| ip:port |ip:port:host 字串或文本或host文件
   -T THREAD, --thread THREAD
                         多线程数量
   -t TIMEOUT, --timeout TIMEOUT

@@ -338,7 +338,7 @@ def get_cdn():
 
     parser = argparse.ArgumentParser(description='cdn-get 配置')
     parser.add_argument('-o', '--out', type=str, default=None, help='输出hosts 文件路径')
-    parser.add_argument('-c', '--cdn', nargs='+', default=[], help='输出hosts 文件路径')
+    parser.add_argument('-c', '--cdn', nargs='+', default=[], help='cdn configs配置,支持ip| ip:port |ip:port:host 字串或文本或host文件')
     parser.add_argument('-T', '--thread', type=int, default=8, help='多线程数量')
     parser.add_argument('-t', '--timeout', type=int, default=10, help='下载请求超时时间, 默认10s')
     parser.add_argument('-r', '--retry', type=int, default=3, help='下载请求重试次数, 默认3')
