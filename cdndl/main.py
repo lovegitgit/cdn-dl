@@ -2,15 +2,14 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import json
 from os import path
 import os
 import random
 import re
 import signal
-from time import sleep
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import requests
 from tqdm import tqdm
 import urllib3
 import ipaddress
@@ -108,11 +107,9 @@ def parse_cdn_config(hostname: str, cdn_configs: str):
         hostname, ip, port = parse_str_config(config_str, hostname)
         if hostname:
             hostname_ip_map[hostname].append((ip, port))
-    if not hostname_ip_map:
-        raise RuntimeError('无法检测到可用CDN, 请检查配置!')
     for k, v in hostname_ip_map.items():
         hostname_ip_map[k] = list(dict.fromkeys(v))
-    if DEBUG:
+    if DEBUG and hostname_ip_map:
         print()
         print('CDN 配置如下:')
         for k, v in hostname_ip_map.items():
@@ -129,6 +126,8 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
     def init_cdn_map():
         hostname, _ = parse_url(url)
         cdn_map = parse_cdn_config(hostname, cdn_configs)
+        if not cdn_map:
+            raise RuntimeError('无法检测到可用CDN, 请检查配置!')
         return cdn_map
 
     def get_ip_port(hostname: str):
@@ -230,35 +229,81 @@ def get_cdn():
         domains = list(dict.fromkeys(domains))
         return domains
 
+    def init_cdn_map():
+        hostname, _ = parse_url(url)
+        cdn_map = parse_cdn_config(hostname, cdn_configs)
+        return cdn_map
+
+    def get_ip_port(hostname: str, used_choices: list):
+        if not cdn_map:
+            return None, None
+        choices = cdn_map.get(hostname)
+        if not choices:
+            choices = []
+            for _, v in cdn_map.items():
+                choices.extend(v)
+        available_choices = [choice for choice in choices if choice not in used_choices]
+        if available_choices:
+            return random.choice(available_choices)
+        else:
+            return None, None
+
     def get_dns(domains: List[str]):
         def dns_lookup(domain):
             def dns_lookup_internal():
-                has_error = False
                 dns = []
-                try:
-                    session = requests.Session()
-                    session.mount('https://', adapter=requests.adapters.HTTPAdapter(max_retries=retry))
-
-                    with session.get(api.format(domain), headers={'accept': 'application/dns-json'}, timeout=timeout) as res:
-                        json_data = res.json()
-                        if 'Answer' in json_data:
-                            records = json_data['Answer']
-                            for record in records:
-                                if record['type'] == 1:
-                                    dns.append(record['data'])
-                except:
-                    has_error = True
-                return has_error, dns
+                used_choices = []
+                headers={'accept': 'application/dns-json'}
+                url = api.format(domain)
+                hostname, _ = parse_url(url)
+                headers.update({'Host': hostname})
+                while True:
+                    if not cdn_map:
+                        print('CDN 为空, 跳过使用CDN 解析')
+                        pool = urllib3.HTTPSConnectionPool(
+                            hostname,
+                            assert_hostname=hostname,
+                            server_hostname=hostname,
+                            cert_reqs='CERT_NONE',
+                        )
+                    else:
+                        ip, port = get_ip_port(hostname, used_choices)
+                        if not ip:
+                            print('所有CDN 都无法解析, 退出中... ...')
+                            break
+                        used_choices.append((ip, port))
+                        print('cdn 配置为: {}:{}:{}'.format(hostname, ip, port))
+                        pool = urllib3.HTTPSConnectionPool(
+                            ip,
+                            assert_hostname=hostname,
+                            server_hostname=hostname,
+                            cert_reqs='CERT_NONE',
+                            port=port
+                        )
+                    try:
+                        with pool.urlopen('GET', url,
+                                         redirect=False,
+                                         headers=headers,
+                                         assert_same_host=False,
+                                         timeout=timeout,
+                                         preload_content=False,
+                                         retries=urllib3.Retry(retry, backoff_factor=1)) as response:
+                            json_data = json.loads(response.data.decode('utf-8'))
+                            if 'Answer' in json_data:
+                                records = json_data['Answer']
+                                for record in records:
+                                    if record['type'] == 1:
+                                        dns.append(record['data'])
+                            if response.status == 200:
+                                break
+                    except Exception as e:
+                        if not cdn_map:
+                            break
+                        continue
+                return dns
 
             print(f"Performing DNS lookup for {domain}...")
-            has_error, dns = dns_lookup_internal()
-            retry_cnt = 0
-            while has_error and retry_cnt < 3:
-                stay_seconds = round(random.uniform(1, 3), 2)
-                sleep(stay_seconds)
-                print(f"Retrying DNS lookup for {domain}...")
-                has_error, dns = dns_lookup_internal()
-                retry_cnt += 1
+            dns = dns_lookup_internal()
             return domain, dns
 
         dns_map = defaultdict(list)
@@ -293,22 +338,31 @@ def get_cdn():
 
     parser = argparse.ArgumentParser(description='cdn-get 配置')
     parser.add_argument('-o', '--out', type=str, default=None, help='输出hosts 文件路径')
+    parser.add_argument('-c', '--cdn', type=str, default=None, help='输出hosts 文件路径')
     parser.add_argument('-T', '--thread', type=int, default=8, help='多线程数量')
     parser.add_argument('-t', '--timeout', type=int, default=10, help='下载请求超时时间, 默认10s')
     parser.add_argument('-r', '--retry', type=int, default=3, help='下载请求重试次数, 默认3')
     parser.add_argument('domain', nargs='+', help='需要获取cdn的域名或者文本')
     # 'https://dns.google/resolve?name={}&type=A'
-    parser.add_argument('--api', type=str, default='https://dns.alidns.com/resolve?name={}&type=1', help='dns api, 默认ali')
+    parser.add_argument('--api', type=str, default='https://dns.alidns.com/resolve?name={}&type=1', help='dns api, 默认ali, 使用CF 使用cf dns')
+    parser.add_argument('-d', '--debug', action='store_true', default=False, help="是否打印调试信息")
     args = parser.parse_args()
     domain_arg = args.domain
     path_arg = args.out
     api = args.api
+    if api == 'CF':
+        api = 'https://cloudflare-dns.com/dns-query?name={}&type=A'
     print('DNS API:', api)
     threads = args.thread
     timeout = args.timeout
     retry = args.retry
+    global DEBUG
+    DEBUG = args.debug
     domains = parse_domains()
     print('待解析域名列表:', domains)
+    cdn_configs = [args.cdn] if args.cdn else []
+    url = api.format(domains[0])
+    cdn_map = init_cdn_map()
     dns_map = get_dns(domains)
     save_or_print_hosts()
 
@@ -338,8 +392,3 @@ def main():
 
 if __name__ == '__main__':
     get_cdn()
-
-
-
-
-
