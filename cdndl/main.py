@@ -253,7 +253,7 @@ def get_cdn():
             def dns_lookup_internal():
                 dns = []
                 used_choices = []
-                headers={'accept': 'application/dns-json'}
+                headers = {'accept': 'application/dns-json'}
                 url = api.format(domain)
                 hostname, _ = parse_url(url)
                 headers.update({'Host': hostname})
