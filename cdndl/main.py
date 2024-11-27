@@ -311,7 +311,8 @@ def get_cdn():
             future_to_domain = {executor.submit(dns_lookup, domain) for domain in domains}
             for future in as_completed(future_to_domain):
                 domain, dns = future.result()
-                dns_map[domain] = dns
+                if dns:
+                    dns_map[domain] = dns
             executor.shutdown(wait=True)
         for k, v in dns_map.items():
             dns_map[k] = list(dict.fromkeys(v))
