@@ -272,7 +272,7 @@ def get_cdn():
                             print('所有CDN 都无法解析, 退出中... ...')
                             break
                         used_choices.append((ip, port))
-                        print('cdn 配置为: {}:{}:{}'.format(hostname, ip, port))
+                        print('使用CDN: {}:{}:{} 解析 {}'.format(hostname, ip, port, domain))
                         pool = urllib3.HTTPSConnectionPool(
                             ip,
                             assert_hostname=hostname,
@@ -338,7 +338,7 @@ def get_cdn():
 
     parser = argparse.ArgumentParser(description='cdn-get 配置')
     parser.add_argument('-o', '--out', type=str, default=None, help='输出hosts 文件路径')
-    parser.add_argument('-c', '--cdn', type=str, default=None, help='输出hosts 文件路径')
+    parser.add_argument('-c', '--cdn', nargs='+', default=[], help='输出hosts 文件路径')
     parser.add_argument('-T', '--thread', type=int, default=8, help='多线程数量')
     parser.add_argument('-t', '--timeout', type=int, default=10, help='下载请求超时时间, 默认10s')
     parser.add_argument('-r', '--retry', type=int, default=3, help='下载请求重试次数, 默认3')
@@ -360,7 +360,7 @@ def get_cdn():
     DEBUG = args.debug
     domains = parse_domains()
     print('待解析域名列表:', domains)
-    cdn_configs = [args.cdn] if args.cdn else []
+    cdn_configs = args.cdn
     url = api.format(domains[0])
     cdn_map = init_cdn_map()
     dns_map = get_dns(domains)
