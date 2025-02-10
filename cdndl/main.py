@@ -8,7 +8,8 @@ import os
 import random
 import re
 import signal
-from time import sleep
+import sys
+from time import sleep, time
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
@@ -42,7 +43,6 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 
-
 def is_ip_address(ip_str: str):
     try:
         ip = ipaddress.ip_address(ip_str)
@@ -59,7 +59,6 @@ def is_domain_name(string: str):
 
 def is_valid_port(port: int):
     return port > 0 and port < 65535
-
 
 def parse_str_config(config_str: str):
     def method1():
@@ -175,7 +174,42 @@ def dns_lookup(domain):
         retry_cnt += 1
     return dns
 
+def show_freshable_content(content: str):
+    print(content, end='\r')
+    sys.stdout.flush()
+
+class SpeedUpdater:
+
+    def __init__(self, total_size):
+        self.total_size = total_size
+        self.current_size = 0
+        self.last_ts = 0
+        self.current_ts = 0
+        self.last_size = 0
+        self.start_ts = 0
+
+    def update(self, size: int):
+        current_ts = time()
+        self.current_ts = current_ts
+        if self.start_ts == 0:
+            self.start_ts = current_ts
+        self.current_size += size
+        if self.current_ts - self.last_ts > 1 and self.current_ts - self.start_ts > 1:
+            current_speed = int((self.current_size - self.last_size) / ((self.current_ts - self.last_ts) * 1024))
+            avg_speed = int(self.current_size / ((self.current_ts - self.start_ts) * 1024))
+            self.last_size =  self.current_size
+            self.last_ts = current_ts
+            percent = 0
+            if self.total_size > 0:
+                percent = round((self.current_size * 100) / self.total_size, 2)
+            spd_info = '    当前下载速度(cur/avg)为: {}/{} kB/s'.format(current_speed, avg_speed)
+            if percent:
+                spd_info += ',进度为{}%'.format(percent)
+            show_freshable_content(spd_info)
+
+
 def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts: int, timeout: int, retry: int):
+
     def get_ip_port(choices: list, used_choices: list):
         available_choices = [choice for choice in choices if choice not in used_choices]
         if available_choices:
@@ -221,21 +255,15 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
                 if response.status in (301, 302, 303, 307, 308) and 'Location' in response.headers:
                     # 获取重定向的 URL
                     url = response.headers['Location']
-                    # headers = response.headers
+                    print('重定向为: {}'.format(url))
                     continue
                 if response.status == 200:
                     total_size = int(response.headers.get('content-length', 0))
-                    with open(save_path, 'wb') as file, tqdm(
-                        desc=save_path,
-                        total=total_size,
-                        unit='K',
-                        unit_scale=True,
-                        unit_divisor=1024,
-                    ) as bar:
+                    speed_updater = SpeedUpdater(total_size)
+                    with open(save_path, 'wb') as file:
                         for data in response.stream(ts):
                             file.write(data)
-                            bar.update(len(data))
-                        response.release_conn()
+                            speed_updater.update(len(data))
                         res = True
                         break
                 else:
