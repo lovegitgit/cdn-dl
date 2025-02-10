@@ -9,6 +9,7 @@ import random
 import re
 import signal
 import sys
+import threading
 from time import sleep, time
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -187,26 +188,41 @@ class SpeedUpdater:
         self.current_ts = 0
         self.last_size = 0
         self.start_ts = 0
+        self.spd_thread = threading.Thread(target=self.__update_spd_info)
+        self.spd_thread.setDaemon(True)
+        self.running = False
+
+    def __update_spd_info(self):
+        self.running = True
+        while self.running:
+            self.current_ts = time()
+            if self.current_ts - self.last_ts > 0.9 and self.current_ts - self.start_ts > 0.9:
+                current_speed = int((self.current_size - self.last_size) / ((self.current_ts - self.last_ts) * 1024))
+                avg_speed = int(self.current_size / ((self.current_ts - self.start_ts) * 1024))
+                self.last_size =  self.current_size
+                self.last_ts = self.current_ts
+                percent = 0
+                if self.total_size > 0:
+                    percent = round((self.current_size * 100) / self.total_size, 2)
+                spd_info = '    当前下载速度(cur/avg)为: {}/{} kB/s'.format(current_speed, avg_speed)
+                if percent:
+                    spd_info += ',进度为{}%'.format(percent)
+                show_freshable_content(spd_info)
+            else:
+                sleep(0.1)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.running = False
+        self.spd_thread.join()
 
     def update(self, size: int):
-        current_ts = time()
-        self.current_ts = current_ts
-        if self.start_ts == 0:
-            self.start_ts = current_ts
         self.current_size += size
-        if self.current_ts - self.last_ts > 1 and self.current_ts - self.start_ts > 1:
-            current_speed = int((self.current_size - self.last_size) / ((self.current_ts - self.last_ts) * 1024))
-            avg_speed = int(self.current_size / ((self.current_ts - self.start_ts) * 1024))
-            self.last_size =  self.current_size
-            self.last_ts = current_ts
-            percent = 0
-            if self.total_size > 0:
-                percent = round((self.current_size * 100) / self.total_size, 2)
-            spd_info = '    当前下载速度(cur/avg)为: {}/{} kB/s'.format(current_speed, avg_speed)
-            if percent:
-                spd_info += ',进度为{}%'.format(percent)
-            show_freshable_content(spd_info)
-
+        if self.start_ts == 0:
+            self.start_ts = time()
+            self.spd_thread.start()
 
 def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts: int, timeout: int, retry: int):
 
@@ -259,8 +275,7 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
                     continue
                 if response.status == 200:
                     total_size = int(response.headers.get('content-length', 0))
-                    speed_updater = SpeedUpdater(total_size)
-                    with open(save_path, 'wb') as file:
+                    with open(save_path, 'wb') as file, SpeedUpdater(total_size) as speed_updater:
                         for data in response.stream(ts):
                             file.write(data)
                             speed_updater.update(len(data))
