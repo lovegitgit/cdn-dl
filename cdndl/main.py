@@ -188,8 +188,7 @@ class SpeedUpdater:
         self.current_ts = 0
         self.last_size = 0
         self.start_ts = 0
-        self.spd_thread = threading.Thread(target=self.__update_spd_info)
-        self.spd_thread.setDaemon(True)
+        self.spd_thread = threading.Thread(target=self.__update_spd_info, daemon=True)
         self.running = False
 
     def __update_spd_info(self):
