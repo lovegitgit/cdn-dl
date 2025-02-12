@@ -153,13 +153,13 @@ def dns_lookup(domain):
         has_error = False
         dns = []
         try:
-            res = requests.get(DEF_DNS_API.format(domain), headers={'accept': 'application/dns-json'})
-            json_data = res.json()
-            if 'Answer' in json_data:
-                records = json_data['Answer']
-                for record in records:
-                    if record['type'] == 1:
-                        dns.append(record['data'])
+            with requests.get(DEF_DNS_API.format(domain), headers={'accept': 'application/dns-json'}) as res:
+                json_data = res.json()
+                if 'Answer' in json_data:
+                    records = json_data['Answer']
+                    for record in records:
+                        if record['type'] == 1:
+                            dns.append(record['data'])
         except:
             has_error = True
         return has_error, dns
