@@ -14,7 +14,6 @@ from time import sleep, time
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
-from tqdm import tqdm
 import urllib3
 import ipaddress
 from urllib.parse import urlparse

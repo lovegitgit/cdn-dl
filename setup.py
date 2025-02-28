@@ -26,7 +26,6 @@ setup(
     },
     python_requires=">=3.8",
     install_requires=[
-        'tqdm',
         'urllib3',
         'requests',
     ],
