@@ -123,7 +123,7 @@ def gen_cdn_map(configs: List[str]):
         print()
     return cdn_map
 
-class Cdn:
+class CdnCenter:
     def __init__(self, configs: List[str]):
         self.cdn_map = gen_cdn_map(configs)
         self.choice_map = defaultdict(list)
@@ -132,13 +132,12 @@ class Cdn:
         choices = self.choice_map.get(hostname)
         if not choices:
             choices = self.cdn_map.get(hostname, [])
-            all_domain_choices = self.cdn_map.get(ALL_DOMAIN_KEY, [])
-            choices.extend(all_domain_choices)
             if not choices:
+                all_domain_choices = self.cdn_map.get(ALL_DOMAIN_KEY, [])
+                choices.extend(all_domain_choices)
                 dns = dns_lookup(hostname)
                 for r in dns:
                     choices.append((r, 443))
-                    self.cdn_map[hostname].append((r, 443))
             choices = list(dict.fromkeys(choices))
             self.choice_map[hostname] = choices
         return choices
@@ -232,7 +231,7 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
             return None, None
 
     res = False
-    cdn = Cdn(cdn_configs)
+    cdn = CdnCenter(cdn_configs)
     headers = {}
     if ua:
         headers.update({'User-Agent': random.choice(USER_AGENTS)})
@@ -263,13 +262,14 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
                              assert_same_host=False,
                              timeout=timeout,
                              preload_content=False,
-                             retries=urllib3.Retry(retry, backoff_factor=1)) as response:
+                             retries=urllib3.Retry(retry, backoff_factor=2, status_forcelist=[404, 500, 502, 503, 504])) as response:
                 # 检查是否为重定向
                 print('请求{} 返回 {}\n'.format(url, response.status))
                 if response.status in (301, 302, 303, 307, 308) and 'Location' in response.headers:
                     # 获取重定向的 URL
                     url = response.headers['Location']
                     print('重定向为: {}'.format(url))
+                    bad_cdn_map.clear()
                     continue
                 if response.status == 200:
                     total_size = int(response.headers.get('content-length', 0))
