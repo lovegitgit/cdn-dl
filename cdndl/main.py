@@ -458,7 +458,7 @@ def main():
     parser.add_argument('-u', '--url', type=str, required=True, help='文件下载url')
     parser.add_argument('-o', '--out', type=str, required=True, help='文件下载路径')
     parser.add_argument('cdn', nargs='+', help='cdn configs配置,支持ip| ip:port |ip:port:host 字串或文本或host文件')
-    parser.add_argument('-ua', '--use_agent', type=bool, default=False, help='是否使用user agent')
+    parser.add_argument('-ua', '--use_agent', action='store_true', default=False, help='是否使用user agent')
     parser.add_argument('-ts', '--trunk_size', type=int, default=8192, help='下载使用的trunk size, 默认8192')
     parser.add_argument('-t', '--timeout', type=int, default=10, help='下载请求超时时间, 默认10s')
     parser.add_argument('-r', '--retry', type=int, default=3, help='下载请求重试次数, 默认3')
