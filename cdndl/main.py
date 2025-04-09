@@ -126,20 +126,19 @@ def gen_cdn_map(configs: List[str]):
 class CdnCenter:
     def __init__(self, configs: List[str]):
         self.cdn_map = gen_cdn_map(configs)
-        self.choice_map = defaultdict(list)
 
-    def get_all_cdn_for_domain(self, hostname):
-        choices = self.choice_map.get(hostname)
+    def get_cdn_for_domain(self, hostname):
+        choices = self.cdn_map.get(hostname, [])
         if not choices:
-            choices = self.cdn_map.get(hostname, [])
-            if not choices:
-                all_domain_choices = self.cdn_map.get(ALL_DOMAIN_KEY, [])
-                choices.extend(all_domain_choices)
-                dns = dns_lookup(hostname)
-                for r in dns:
-                    choices.append((r, 443))
+            all_domain_choices = self.cdn_map.get(ALL_DOMAIN_KEY, [])
+            choices.extend(all_domain_choices)
+            dns = dns_lookup(hostname)
+            for r in dns:
+                choices.append((r, 443))
             choices = list(dict.fromkeys(choices))
-            self.choice_map[hostname] = choices
+            self.cdn_map[hostname] = choices
+        if not choices:
+            raise RuntimeError('无法获取{} 的cdn 配置, 请检查域名或配置!'.format(hostname))
         return choices
 
 def parse_url(url: str):
@@ -199,11 +198,10 @@ class SpeedUpdater:
                 self.last_size =  self.current_size
                 self.last_ts = self.current_ts
                 percent = 0
+                spd_info = '    当前下载速度(cur/avg)为: {}/{} kB/s'.format(current_speed, avg_speed)
                 if self.total_size > 0:
                     percent = round((self.current_size * 100) / self.total_size, 2)
-                spd_info = '    当前下载速度(cur/avg)为: {}/{} kB/s'.format(current_speed, avg_speed)
-                if percent:
-                    spd_info += ',进度为{}%'.format(percent)
+                    spd_info += ', 进度为{}%'.format(percent)
                 show_freshable_content(spd_info)
             else:
                 sleep(0.1)
@@ -212,8 +210,9 @@ class SpeedUpdater:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.running = False
-        self.spd_thread.join()
+        if self.running:
+            self.running = False
+            self.spd_thread.join()
 
     def update(self, size: int):
         self.current_size += size
@@ -230,6 +229,10 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
         else:
             return None, None
 
+    def handle_error():
+        print('请求{} 异常\n'.format(url))
+        bad_cdn_map[hostname].append((ip, port))
+
     res = False
     cdn = CdnCenter(cdn_configs)
     headers = {}
@@ -237,12 +240,9 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
         headers.update({'User-Agent': random.choice(USER_AGENTS)})
     bad_cdn_map = defaultdict(list)
     while True:
-        def handle_error():
-            print('请求{} 异常\n'.format(url))
-            bad_cdn_map[hostname].append((ip, port))
-
         hostname, _ = parse_url(url)
-        ip, port = get_ip_port(cdn.get_all_cdn_for_domain(hostname), bad_cdn_map.get(hostname, []))
+        print('正在请求: {}'.format(url))
+        ip, port = get_ip_port(cdn.get_cdn_for_domain(hostname), bad_cdn_map.get(hostname, []))
         if not ip:
             print('所有CDN 都无法下载, 退出中... ...')
             break
@@ -269,7 +269,7 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
                     # 获取重定向的 URL
                     url = response.headers['Location']
                     print('重定向为: {}'.format(url))
-                    bad_cdn_map.clear()
+                    # bad_cdn_map.clear()
                     continue
                 if response.status == 200:
                     total_size = int(response.headers.get('content-length', 0))
@@ -448,7 +448,6 @@ def get_cdn():
     domains = parse_domains()
     print('待解析域名列表:', domains)
     cdn_configs = args.cdn
-    url = api.format(domains[0])
     cdn_map = init_cdn_map()
     dns_map = get_dns(domains)
     save_or_print_hosts()
@@ -457,7 +456,7 @@ def main():
     parser = argparse.ArgumentParser(description='cdn-dl 下载配置')
     parser.add_argument('-u', '--url', type=str, required=True, help='文件下载url')
     parser.add_argument('-o', '--out', type=str, required=True, help='文件下载路径')
-    parser.add_argument('cdn', nargs='+', help='cdn configs配置,支持ip| ip:port |ip:port:host 字串或文本或host文件')
+    parser.add_argument('-c', '--cdn', nargs='+', default=[], help='cdn configs配置,支持ip| ip:port |ip:port:host 字串或文本或host文件')
     parser.add_argument('-ua', '--use_agent', action='store_true', default=False, help='是否使用user agent')
     parser.add_argument('-ts', '--trunk_size', type=int, default=8192, help='下载使用的trunk size, 默认8192')
     parser.add_argument('-t', '--timeout', type=int, default=10, help='下载请求超时时间, 默认10s')
