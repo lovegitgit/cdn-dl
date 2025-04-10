@@ -225,7 +225,7 @@ def download_file(url: str, save_path: str, cdn_configs: List[str], ua: bool, ts
     def get_ip_port(choices: list, used_choices: list):
         available_choices = [choice for choice in choices if choice not in used_choices]
         if available_choices:
-            return random.choice(available_choices)
+            return available_choices[0]
         else:
             return None, None
 
@@ -328,7 +328,7 @@ def get_cdn():
     def get_ip_port(choices: list, used_choices: list):
         available_choices = [choice for choice in choices if choice not in used_choices]
         if available_choices:
-            return random.choice(available_choices)
+            return available_choices[0]
         else:
             return None, None
 
