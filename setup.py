@@ -10,7 +10,7 @@ with open(os.path.join(this_directory, "README.md"), encoding="utf-8") as f:
 
 setup(
     name='cdn-dl',
-    version='2.3',
+    version='2.4',
     description='通过cdn 下载文件',
     long_description=long_description,
     long_description_content_type='text/markdown',
